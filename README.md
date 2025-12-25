@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-=======
 # Voting DApp – Secure, Single-Election Smart Contract Architecture
 ### **Project Overview**
 * This project is a decentralized voting application (DApp) built using Ethereum smart contracts, Hardhat, React (Vite), and MetaMask.
@@ -131,5 +129,4 @@ voting_dapp/
 - Avoids dangerous state reuse
 - Clean separation of concerns
 - Strong interview / evaluation justification
->>>>>>> af76e14 (Replaced README.md)
 
