@@ -2,10 +2,10 @@
 pragma solidity ^0.8.19;
 
 /*
-    VotingElection
-    - Admin controlled election
-    - Registration + Voting phases
-    - One wallet + one identity = one vote
+    VotingElection (Permanent Election System)
+    - Single deployed contract
+    - Multiple elections inside
+    - One active election at a time
 */
 
 contract VotingElection {
@@ -21,6 +21,10 @@ contract VotingElection {
         _;
     }
 
+    constructor() {
+        admin = msg.sender;
+    }
+
     /* =====================================================
                         ELECTION STATE
     ====================================================== */
@@ -32,24 +36,8 @@ contract VotingElection {
         Ended
     }
 
-    ElectionState public currentState;
-
     /* =====================================================
-                            TIME
-    ====================================================== */
-
-    uint public registrationEndTime;
-    uint public votingEndTime;
-
-    /* =====================================================
-                        IDENTITY SALT
-    ====================================================== */
-
-    // 🔐 Event-specific salt (on-chain)
-    bytes32 public eventSalt;
-
-    /* =====================================================
-                        CANDIDATES
+                        STRUCTS
     ====================================================== */
 
     struct Candidate {
@@ -58,121 +46,179 @@ contract VotingElection {
         uint voteCount;
     }
 
-    uint public candidateCount;
-    mapping(uint => Candidate) public candidates;
+    struct Election {
+        ElectionState state;
+        uint registrationEndTime;
+        uint votingEndTime;
+        bytes32 eventSalt;
+
+        uint candidateCount;
+        mapping(uint => Candidate) candidates;
+
+        mapping(address => bool) registered;
+        mapping(address => bool) hasVoted;
+        mapping(bytes32 => bool) usedIdentities;
+        mapping(address => bytes32) voterIdentity;
+    }
 
     /* =====================================================
-                        VOTERS & IDENTITY
+                        STORAGE
     ====================================================== */
 
-    mapping(address => bool) public registered;
-    mapping(address => bool) public hasVoted;
-
-    mapping(bytes32 => bool) public usedIdentities;
-    mapping(address => bytes32) public voterIdentity;
+    mapping(uint => Election) private elections;
+    uint public electionCounter;
+    uint public activeElectionId;
 
     /* =====================================================
                             EVENTS
     ====================================================== */
 
-    event CandidateAdded(uint candidateId, string name);
-    event RegistrationStarted(uint endTime);
-    event VotingStarted(uint endTime);
-    event VoterRegistered(address voter, bytes32 identityHash);
-    event VoteCast(address voter, uint candidateId);
-    event ElectionEnded();
+    event ElectionCreated(uint electionId);
+    event CandidateAdded(uint electionId, uint candidateId, string name);
+    event RegistrationStarted(uint electionId, uint endTime);
+    event VotingStarted(uint electionId, uint endTime);
+    event VoterRegistered(uint electionId, address voter, bytes32 identityHash);
+    event VoteCast(uint electionId, address voter, uint candidateId);
+    event ElectionEnded(uint electionId);
 
     /* =====================================================
-                        CONSTRUCTOR
+                        ADMIN FUNCTIONS
     ====================================================== */
 
-    constructor() {
-        admin = msg.sender;
-        currentState = ElectionState.Created;
+    function createElection() external onlyAdmin {
+        electionCounter++;
 
-        // unique salt per deployment
-        eventSalt = keccak256(
-            abi.encodePacked(block.timestamp, msg.sender)
+        Election storage e = elections[electionCounter];
+        e.state = ElectionState.Created;
+        e.eventSalt = keccak256(
+            abi.encodePacked(block.timestamp, electionCounter)
         );
+
+        activeElectionId = electionCounter;
+
+        emit ElectionCreated(electionCounter);
+    }
+
+    function addCandidate(uint electionId, string memory name)
+        external
+        onlyAdmin
+    {
+        Election storage e = elections[electionId];
+        require(e.state == ElectionState.Created, "Cannot add candidates now");
+
+        e.candidateCount++;
+        e.candidates[e.candidateCount] =
+            Candidate(e.candidateCount, name, 0);
+
+        emit CandidateAdded(electionId, e.candidateCount, name);
+    }
+
+    function startRegistration(uint electionId, uint durationInSeconds)
+        external
+        onlyAdmin
+    {
+        Election storage e = elections[electionId];
+        require(e.state == ElectionState.Created, "Invalid state");
+
+        e.state = ElectionState.RegistrationOpen;
+        e.registrationEndTime = block.timestamp + durationInSeconds;
+
+        emit RegistrationStarted(electionId, e.registrationEndTime);
+    }
+
+    function startVoting(uint electionId, uint durationInSeconds)
+        external
+        onlyAdmin
+    {
+        Election storage e = elections[electionId];
+        require(e.state == ElectionState.RegistrationOpen, "Registration not completed");
+        require(block.timestamp >= e.registrationEndTime, "Registration still active");
+
+        e.state = ElectionState.VotingOpen;
+        e.votingEndTime = block.timestamp + durationInSeconds;
+
+        emit VotingStarted(electionId, e.votingEndTime);
+    }
+
+    function endElection(uint electionId) external onlyAdmin {
+        Election storage e = elections[electionId];
+        require(e.state == ElectionState.VotingOpen, "Voting not active");
+        require(block.timestamp >= e.votingEndTime, "Voting still active");
+
+        e.state = ElectionState.Ended;
+
+        emit ElectionEnded(electionId);
     }
 
     /* =====================================================
-                    ADMIN FUNCTIONS
+                        VOTER FUNCTIONS
     ====================================================== */
 
-    function addCandidate(string memory _name) external onlyAdmin {
-        require(currentState == ElectionState.Created, "Cannot add candidates now");
+    function registerVoter(uint electionId, bytes32 identityHash) external {
+        Election storage e = elections[electionId];
 
-        candidateCount++;
-        candidates[candidateCount] = Candidate(candidateCount, _name, 0);
+        require(e.state == ElectionState.RegistrationOpen, "Registration closed");
+        require(block.timestamp <= e.registrationEndTime, "Registration time over");
+        require(!e.registered[msg.sender], "Wallet already registered");
+        require(!e.usedIdentities[identityHash], "Identity already used");
 
-        emit CandidateAdded(candidateCount, _name);
+        e.registered[msg.sender] = true;
+        e.usedIdentities[identityHash] = true;
+        e.voterIdentity[msg.sender] = identityHash;
+
+        emit VoterRegistered(electionId, msg.sender, identityHash);
     }
 
-    function startRegistration(uint durationInSeconds) external onlyAdmin {
-        require(currentState == ElectionState.Created, "Invalid state");
+    function vote(uint electionId, uint candidateId) external {
+        Election storage e = elections[electionId];
 
-        currentState = ElectionState.RegistrationOpen;
-        registrationEndTime = block.timestamp + durationInSeconds;
+        require(e.state == ElectionState.VotingOpen, "Voting not open");
+        require(block.timestamp <= e.votingEndTime, "Voting time over");
+        require(e.registered[msg.sender], "Not registered");
+        require(!e.hasVoted[msg.sender], "Already voted");
+        require(candidateId > 0 && candidateId <= e.candidateCount, "Invalid candidate");
 
-        emit RegistrationStarted(registrationEndTime);
-    }
+        e.candidates[candidateId].voteCount++;
+        e.hasVoted[msg.sender] = true;
 
-    function startVoting(uint durationInSeconds) external onlyAdmin {
-        require(currentState == ElectionState.RegistrationOpen, "Registration not completed");
-        require(block.timestamp >= registrationEndTime, "Registration still active");
-
-        currentState = ElectionState.VotingOpen;
-        votingEndTime = block.timestamp + durationInSeconds;
-
-        emit VotingStarted(votingEndTime);
-    }
-
-    function endElection() external onlyAdmin {
-        require(currentState == ElectionState.VotingOpen, "Voting not active");
-        require(block.timestamp >= votingEndTime, "Voting still active");
-
-        currentState = ElectionState.Ended;
-
-        emit ElectionEnded();
+        emit VoteCast(electionId, msg.sender, candidateId);
     }
 
     /* =====================================================
-                    VOTER FUNCTIONS
+                        READ FUNCTIONS
     ====================================================== */
 
-    function registerVoter(bytes32 identityHash) external {
-        require(currentState == ElectionState.RegistrationOpen, "Registration closed");
-        require(block.timestamp <= registrationEndTime, "Registration time over");
-        require(!registered[msg.sender], "Wallet already registered");
-        require(!usedIdentities[identityHash], "Identity already used");
-
-        registered[msg.sender] = true;
-        usedIdentities[identityHash] = true;
-        voterIdentity[msg.sender] = identityHash;
-
-        emit VoterRegistered(msg.sender, identityHash);
+    function getCandidate(uint electionId, uint candidateId)
+        external
+        view
+        returns (Candidate memory)
+    {
+        Election storage e = elections[electionId];
+        require(candidateId > 0 && candidateId <= e.candidateCount, "Invalid candidate");
+        return e.candidates[candidateId];
     }
 
-    function vote(uint candidateId) external {
-        require(currentState == ElectionState.VotingOpen, "Voting not open");
-        require(block.timestamp <= votingEndTime, "Voting time over");
-        require(registered[msg.sender], "Not registered");
-        require(!hasVoted[msg.sender], "Already voted");
-        require(candidateId > 0 && candidateId <= candidateCount, "Invalid candidate");
-
-        candidates[candidateId].voteCount++;
-        hasVoted[msg.sender] = true;
-
-        emit VoteCast(msg.sender, candidateId);
+    function getElectionState(uint electionId)
+        external
+        view
+        returns (ElectionState)
+    {
+        return elections[electionId].state;
     }
 
-    /* =====================================================
-                    READ FUNCTIONS
-    ====================================================== */
+    function getEventSalt(uint electionId)
+        external
+        view
+        returns (bytes32)
+    {
+        return elections[electionId].eventSalt;
+    }
 
-    function getCandidate(uint candidateId) external view returns (Candidate memory) {
-        require(candidateId > 0 && candidateId <= candidateCount, "Invalid candidate");
-        return candidates[candidateId];
+    function getCandidateCount(uint electionId)
+        external
+        view
+        returns (uint)
+    {
+        return elections[electionId].candidateCount;
     }
 }

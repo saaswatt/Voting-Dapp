@@ -6,7 +6,7 @@ import { useElectionContext } from "../context/ElectionContext";
 const STATES = ["Created", "Registration Open", "Voting Open", "Ended"];
 
 export default function VoterPanel() {
-  const { activeContractAddress } = useElectionContext();
+  const { activeElectionId } = useElectionContext();
 
   const [regNo, setRegNo] = useState("");
   const [name, setName] = useState("");
@@ -17,9 +17,11 @@ export default function VoterPanel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // 🔁 Reload election data whenever contract address changes
+  /* ===============================
+        LOAD ELECTION DATA
+  =============================== */
   useEffect(() => {
-    if (!activeContractAddress) {
+    if (!activeElectionId) {
       setCandidates([]);
       setState("");
       setError("No active election");
@@ -27,7 +29,8 @@ export default function VoterPanel() {
     }
 
     loadElectionData();
-  }, [activeContractAddress]);
+    // eslint-disable-next-line
+  }, [activeElectionId]);
 
   const loadElectionData = async () => {
     try {
@@ -36,14 +39,21 @@ export default function VoterPanel() {
 
       const contract = await getContract();
 
-      const currentState = await contract.currentState();
+      const currentState = await contract.getElectionState(
+        activeElectionId
+      );
       setState(STATES[currentState]);
 
-      const count = await contract.candidateCount();
-      const temp = [];
+      const count = await contract.getCandidateCount(
+        activeElectionId
+      );
 
+      const temp = [];
       for (let i = 1; i <= count; i++) {
-        const c = await contract.getCandidate(i);
+        const c = await contract.getCandidate(
+          activeElectionId,
+          i
+        );
         temp.push({
           id: c.id.toNumber(),
           name: c.name,
@@ -54,12 +64,15 @@ export default function VoterPanel() {
       setCandidates(temp);
     } catch (err) {
       console.error(err);
-      setError(err.message || "Failed to load election data");
+      setError(err.reason || err.message || "Failed to load election data");
     } finally {
       setLoading(false);
     }
   };
 
+  /* ===============================
+        REGISTRATION
+  =============================== */
   const validateInput = () => {
     return (
       regNo.length === 10 &&
@@ -78,7 +91,7 @@ export default function VoterPanel() {
       }
 
       const contract = await getContract();
-      const salt = await contract.eventSalt();
+      const salt = await contract.getEventSalt(activeElectionId);
 
       const identityHash = ethers.utils.keccak256(
         ethers.utils.solidityPack(
@@ -87,7 +100,10 @@ export default function VoterPanel() {
         )
       );
 
-      const tx = await contract.registerVoter(identityHash);
+      const tx = await contract.registerVoter(
+        activeElectionId,
+        identityHash
+      );
       await tx.wait();
 
       alert("Registration successful");
@@ -99,6 +115,9 @@ export default function VoterPanel() {
     }
   };
 
+  /* ===============================
+            VOTING
+  =============================== */
   const vote = async () => {
     try {
       setError("");
@@ -109,7 +128,10 @@ export default function VoterPanel() {
       }
 
       const contract = await getContract();
-      const tx = await contract.vote(Number(candidateId));
+      const tx = await contract.vote(
+        activeElectionId,
+        Number(candidateId)
+      );
       await tx.wait();
 
       alert("Vote cast successfully");
@@ -121,7 +143,11 @@ export default function VoterPanel() {
     }
   };
 
-  if (!activeContractAddress) {
+  /* ===============================
+            UI
+  =============================== */
+
+  if (!activeElectionId) {
     return <p>No active election yet. Please wait for admin.</p>;
   }
 

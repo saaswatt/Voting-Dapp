@@ -2,16 +2,12 @@ import { ethers } from "ethers";
 import abi from "../contract/abi.json";
 import { CONTRACT_ADDRESS } from "../contract/config";
 
-// Allowed networks (local + sepolia)
-const ALLOWED_CHAIN_IDS = [31337, 11155111]; // Hardhat, Sepolia
+// Allowed networks (Hardhat + Sepolia)
+const ALLOWED_CHAIN_IDS = [31337, 11155111];
 
 export async function getContract() {
   if (!window.ethereum) {
     throw new Error("MetaMask not found");
-  }
-
-  if (!CONTRACT_ADDRESS) {
-    throw new Error("No active election. Admin must create a new election.");
   }
 
   const provider = new ethers.providers.Web3Provider(window.ethereum);

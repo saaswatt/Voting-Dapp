@@ -1,10 +1,4 @@
 // config.js
 
-// This will hold the ACTIVE election contract address.
-// It is intentionally NOT hardcoded.
-export let CONTRACT_ADDRESS = null;
-
-// Called when admin deploys a new election
-export const setContractAddress = (address) => {
-  CONTRACT_ADDRESS = address;
-};
+// Permanent deployed contract address (Sepolia / testnet)
+export const CONTRACT_ADDRESS = "0x3eDa808B2D4b42c1d64E18486c304D21614ca4c4";

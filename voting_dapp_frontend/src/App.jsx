@@ -9,9 +9,11 @@ function App() {
   const [account, setAccount] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  const { activeContractAddress } = useElectionContext();
+  const { activeElectionId } = useElectionContext();
 
-  // Detect wallet account change
+  /* ===============================
+        ACCOUNT CHANGE HANDLER
+  =============================== */
   useEffect(() => {
     if (!window.ethereum) return;
 
@@ -34,12 +36,14 @@ function App() {
     };
   }, []);
 
-  // Check admin role ONLY when an election exists
+  /* ===============================
+        ADMIN CHECK
+  =============================== */
   useEffect(() => {
     let mounted = true;
 
     const checkAdmin = async () => {
-      if (!account || !activeContractAddress) {
+      if (!account) {
         if (mounted) setIsAdmin(false);
         return;
       }
@@ -62,8 +66,11 @@ function App() {
     return () => {
       mounted = false;
     };
-  }, [account, activeContractAddress]);
+  }, [account]);
 
+  /* ===============================
+              UI
+  =============================== */
   return (
     <div>
       <h1>Voting DApp</h1>
@@ -74,16 +81,12 @@ function App() {
         <>
           <p>Connected: {account}</p>
 
-          {/* 🔓 BOOTSTRAP LOGIC */}
-          {!activeContractAddress ? (
-            <>
-              <p>No active election. Admin must activate one.</p>
-              <AdminPanel />
-            </>
-          ) : isAdmin ? (
+          {isAdmin ? (
             <AdminPanel />
-          ) : (
+          ) : activeElectionId ? (
             <VoterPanel />
+          ) : (
+            <p>No active election yet. Please wait for admin.</p>
           )}
         </>
       )}
