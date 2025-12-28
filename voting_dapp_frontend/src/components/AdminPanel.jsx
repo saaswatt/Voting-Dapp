@@ -9,8 +9,63 @@ export default function AdminPanel() {
   const { activeElectionId, setActiveElectionId } = useElectionContext();
 
   /* ===============================
-        CREATE NEW ELECTION
+        STYLES (INLINE, MINIMAL)
   =============================== */
+
+  const containerStyle = {
+    backgroundColor: "#1e1e1e",
+    width: "100vw",
+    height: "100vh",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  };
+
+  const panelStyle = {
+    border: "1.5px solid #ffffff",
+    borderRadius: "12px",
+    padding: "32px",
+    width: "420px",
+    textAlign: "center",
+    backgroundColor: "#1e1e1e",
+    color: "#ffffff",
+  };
+
+  const sectionStyle = {
+    marginTop: "22px",
+  };
+
+  const inputStyle = {
+    width: "90%",
+    padding: "8px",
+    margin: "8px 0",
+    backgroundColor: "#2a2a2a",
+    border: "1px solid #555",
+    color: "#ffffff",
+    borderRadius: "6px",
+    outline: "none",
+  };
+
+  const buttonStyle = {
+    padding: "8px 16px",
+    margin: "6px",
+    backgroundColor: "#2a2a2a",
+    border: "1px solid #888",
+    color: "#ffffff",
+    borderRadius: "6px",
+    cursor: "pointer",
+  };
+
+  const dangerButtonStyle = {
+    ...buttonStyle,
+    border: "1px solid #ff4d4d",
+    color: "#ff4d4d",
+  };
+
+  /* ===============================
+        CONTRACT ACTIONS
+  =============================== */
+
   const createElection = async () => {
     try {
       const contract = await getContract();
@@ -19,31 +74,17 @@ export default function AdminPanel() {
 
       const id = await contract.activeElectionId();
       setActiveElectionId(id.toNumber());
-
-      alert(`New election created (ID: ${id})`);
     } catch (err) {
-      console.error(err);
       alert(err.reason || err.message || "Failed to create election");
     }
   };
 
-  /* ===============================
-        ADMIN ACTIONS
-  =============================== */
   const addCandidate = async () => {
-    if (!activeElectionId) {
-      alert("No active election");
-      return;
-    }
+    if (!candidateName.trim()) return;
 
     const contract = await getContract();
-    const tx = await contract.addCandidate(
-      activeElectionId,
-      candidateName
-    );
+    const tx = await contract.addCandidate(activeElectionId, candidateName);
     await tx.wait();
-
-    alert("Candidate added");
     setCandidateName("");
   };
 
@@ -54,8 +95,6 @@ export default function AdminPanel() {
       Number(duration)
     );
     await tx.wait();
-
-    alert("Registration started");
     setDuration("");
   };
 
@@ -66,67 +105,98 @@ export default function AdminPanel() {
       Number(duration)
     );
     await tx.wait();
-
-    alert("Voting started");
     setDuration("");
   };
 
   const endElection = async () => {
+    const confirmEnd = window.confirm(
+      "This will permanently end the election. Continue?"
+    );
+    if (!confirmEnd) return;
+
     const contract = await getContract();
     const tx = await contract.endElection(activeElectionId);
     await tx.wait();
-
-    alert("Election ended");
   };
 
+  /* ===============================
+            UI
+  =============================== */
+
   return (
-    <div>
-      <h2>Admin Panel</h2>
+    <div style={containerStyle}>
+      <div style={panelStyle}>
+        <h2>Admin Control Panel</h2>
 
-      {/* CREATE ELECTION */}
-      <button onClick={createElection}>
-        Create New Election
-      </button>
+        {activeElectionId ? (
+          <p style={{ color: "#4da6ff" }}>
+            Active Election ID: {activeElectionId}
+          </p>
+        ) : (
+          <p style={{ color: "#ffcc00" }}>
+            No active election
+          </p>
+        )}
 
-      {activeElectionId && (
-        <p>
-          <strong>Active Election ID:</strong> {activeElectionId}
-        </p>
-      )}
+        <div style={sectionStyle}>
+          <button style={buttonStyle} onClick={createElection}>
+            Create New Election
+          </button>
+        </div>
 
-      <hr />
+        <hr style={{ borderColor: "#444", margin: "22px 0" }} />
 
-      {/* ADD CANDIDATE */}
-      <input
-        placeholder="Candidate name"
-        value={candidateName}
-        onChange={(e) => setCandidateName(e.target.value)}
-      />
-      <button onClick={addCandidate}>Add Candidate</button>
+        <div style={sectionStyle}>
+          <input
+            style={inputStyle}
+            placeholder="Candidate name"
+            value={candidateName}
+            onChange={(e) => setCandidateName(e.target.value)}
+          />
+          <br />
+          <button
+            style={buttonStyle}
+            onClick={addCandidate}
+            disabled={!activeElectionId}
+          >
+            Add Candidate
+          </button>
+        </div>
 
-      <br /><br />
+        <div style={sectionStyle}>
+          <input
+            style={inputStyle}
+            placeholder="Duration (seconds)"
+            value={duration}
+            onChange={(e) => setDuration(e.target.value)}
+          />
+          <br />
+          <button
+            style={buttonStyle}
+            onClick={startRegistration}
+            disabled={!activeElectionId}
+          >
+            Start Registration
+          </button>
+          <button
+            style={buttonStyle}
+            onClick={startVoting}
+            disabled={!activeElectionId}
+          >
+            Start Voting
+          </button>
+        </div>
 
-      {/* PHASE CONTROLS */}
-      <input
-        placeholder="Duration (seconds)"
-        value={duration}
-        onChange={(e) => setDuration(e.target.value)}
-      />
-
-      <br />
-
-      <button onClick={startRegistration}>
-        Start Registration
-      </button>
-      <button onClick={startVoting}>
-        Start Voting
-      </button>
-
-      <br /><br />
-
-      <button onClick={endElection}>
-        End Election
-      </button>
+        <div style={sectionStyle}>
+          <button
+            style={dangerButtonStyle}
+            onClick={endElection}
+            disabled={!activeElectionId}
+          >
+            End Election
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

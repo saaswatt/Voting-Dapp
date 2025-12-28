@@ -12,8 +12,63 @@ function App() {
   const { activeElectionId, loadingElection } = useElectionContext();
 
   /* ===============================
+        STYLES (INLINE, MINIMAL)
+  =============================== */
+
+  const containerStyle = {
+    backgroundColor: "#1e1e1e",
+    width: "100vw",
+    height: "100vh",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    color: "#ffffff",
+  };
+
+  const boxStyle = {
+    border: "1.5px solid #ffffff",
+    borderRadius: "14px",
+    padding: "56px 60px",
+    textAlign: "center",
+    backgroundColor: "#1e1e1e",
+    minWidth: "460px",
+  };
+
+  const welcomeStyle = {
+    fontSize: "18px",
+    letterSpacing: "1px",
+    marginBottom: "8px",
+    color: "#cccccc",
+  };
+
+  const titleStyle = {
+    fontSize: "44px",
+    fontWeight: "600",
+    letterSpacing: "1.5px",
+    marginBottom: "10px",
+  };
+
+  const taglineStyle = {
+    fontSize: "15px",
+    color: "#bbbbbb",
+    marginBottom: "26px",
+  };
+
+  const dividerStyle = {
+    borderTop: "1px solid #ffffff",
+    opacity: 0.25,
+    margin: "26px 0 34px 0",
+  };
+
+  const connectButtonWrapperStyle = {
+    transform: "scale(1.15)",
+    display: "inline-block",
+  };
+
+  /* ===============================
         ACCOUNT CHANGE HANDLER
   =============================== */
+
   useEffect(() => {
     if (!window.ethereum) return;
 
@@ -39,6 +94,7 @@ function App() {
   /* ===============================
         ADMIN CHECK
   =============================== */
+
   useEffect(() => {
     let mounted = true;
 
@@ -71,30 +127,54 @@ function App() {
   /* ===============================
               UI
   =============================== */
+
   if (loadingElection) {
-    return <p>Loading election...</p>;
+    return (
+      <div style={containerStyle}>
+        <p>Loading election...</p>
+      </div>
+    );
   }
 
+  /* ===== LANDING PAGE ===== */
+  if (!account) {
+    return (
+      <div style={containerStyle}>
+        <div style={boxStyle}>
+          <div style={welcomeStyle}>Welcome to</div>
+
+          <div style={titleStyle}>Voting DApp</div>
+
+          <div style={taglineStyle}>
+            A decentralized, tamper-resistant voting system
+          </div>
+
+          <div style={dividerStyle} />
+
+          <div style={connectButtonWrapperStyle}>
+            <WalletConnect setAccount={setAccount} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ===== WALLET CONNECTED ===== */
   return (
-    <div>
-      <h1>Voting DApp</h1>
-
-      {!account ? (
-        <WalletConnect setAccount={setAccount} />
+    <>
+      {isAdmin ? (
+        <AdminPanel />
+      ) : activeElectionId ? (
+        <VoterPanel />
       ) : (
-        <>
-          <p>Connected: {account}</p>
-
-          {isAdmin ? (
-            <AdminPanel />
-          ) : activeElectionId ? (
-            <VoterPanel />
-          ) : (
-            <p>No active election yet. Please wait for admin.</p>
-          )}
-        </>
+        <div style={containerStyle}>
+          <div style={boxStyle}>
+            <p>No active election yet.</p>
+            <p>Please wait for admin.</p>
+          </div>
+        </div>
       )}
-    </div>
+    </>
   );
 }
 
